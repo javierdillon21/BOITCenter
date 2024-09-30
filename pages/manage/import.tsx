@@ -44,7 +44,7 @@ export default function Import() {
       );
     }
   }, [panetCheck]);
-
+//sssss
   useEffect(() => {
     setErrorAlert("");
     if (file) {
