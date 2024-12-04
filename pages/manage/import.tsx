@@ -3,50 +3,86 @@ import XLSX from "xlsx";
 import Header from "../../components/header";
 import Table from "../../components/table";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import Link from "next/link";
 import {
   expectedTemplate,
-  listPcsPanet,
   checkFormatRows,
   checkWorksheetTemplate,
   generateExcel,
   downloadExcel,
+  createRecords,
+  verificarFechaCompromiso,
+  formatDate,
 } from "@/utils/functions";
+import Modal from "../../components/modal";
+import Alert, { AlertTypes } from "../../components/alert";
+import { useRouter } from "next/router";
+import { listPcsPanet } from "@/utils/panet";
+import { submitInforme } from "@/utils/postgresql";
 
 export default function Import() {
+  const router = useRouter();
   const [data, setData] = useState<any[]>([]);
   const [metadata, setMetadata] = useState<HeaderXLSX>();
   const [file, setFile] = useState<File>();
-  const [upload, setupload] = useState<boolean>(true);
-  const [errorStack, setErrorStack] = useState();
-  const [errorAlert, setErrorAlert] = useState<string>();
+  const [isPanetChecking, setIsPanetChecking] = useState(false);
+  const [isInformeSubmitting, setIsInformeSubmitting] = useState(false);
+  const [alert, setAlert] = useState<AlertProps | null>();
   const [panetCheck, setPanetCheck] = useState<{
-    equipos: Equipo[];
+    equipos: EquipoXLSX[];
     notFound: BodyXLSX;
   } | null>(null);
 
+  const [modalDataSubmit, setModalDataSubmit] = useState<boolean>(false);
   const handlePanetChecking = async (data: any[]) => {
     try {
+      setIsPanetChecking(true);
       const response = await listPcsPanet({ id: "dd" }, data);
       setPanetCheck(response);
-
-      setErrorAlert("");
+      console.log("RESPUESTA EN EL CLIENTE:::::",response)
+      setIsPanetChecking(false);
+      setAlert(null);
     } catch (error) {
       console.error("Error fetching data:", error);
-      setErrorAlert("Error fetching data");
+      setAlert({ text: "Error fetching data", type: AlertTypes.error });
     }
   };
-
+  const handleSubmitInforme = (data: BodyXLSX, equipos: EquipoXLSX[]) => {
+    const records = createRecords(data, equipos);
+    try {
+      setIsInformeSubmitting(true);
+      submitInforme({
+        records: records,
+        metadata: metadata as HeaderXLSX,
+      }).then((res) => {
+        if (res.message) {
+          setAlert({
+            text: "Informe cargado existosamente!",
+            type: AlertTypes.success,
+          });
+          setTimeout(() => {
+            router.reload();
+          }, 3000);
+        } else {
+          setAlert({
+            text: "Hubo un error al cargar el informe",
+            type: AlertTypes.error,
+          });
+        }
+        setIsInformeSubmitting(false);
+      });
+    } catch (error) {}
+  };
   useEffect(() => {
     if (panetCheck?.notFound.length !== 0) {
-      setErrorAlert(
-        "Existen equipos con novedades. Descargue el reporte para más información"
-      );
+      setAlert({
+        text: "Existen equipos con novedades. Descargue el reporte para más información",
+        type: AlertTypes.warning,
+      });
     }
   }, [panetCheck]);
-//sssss
+
   useEffect(() => {
-    setErrorAlert("");
+    setAlert(null);
     if (file) {
       const reader = new FileReader();
       reader.onload = function (e: ProgressEvent<FileReader>) {
@@ -63,8 +99,8 @@ export default function Import() {
           const metadata: HeaderXLSX = {
             informe: worksheet["B1"].w,
             emisor: worksheet["B2"].w,
-            fecha_compromiso: worksheet["B3"].w,
-            fecha_recepcion: worksheet["B4"].w,
+            fecha_recepcion: worksheet["B3"].w,
+            fecha_compromiso: worksheet["B4"].w,
           };
 
           const body: BodyXLSX = XLSX.utils.sheet_to_json(worksheet, {
@@ -72,12 +108,18 @@ export default function Import() {
             dateNF: "yyyy-mm-dd",
             range: "A6:F9999",
           });
+          const checkDates = verificarFechaCompromiso(metadata.fecha_recepcion, metadata.fecha_compromiso)
+          if(!checkDates) throw new Error(`DatesError: Las fechas ingresadas no son correctas o su diferencia es mayor a 3 meses`);
           const rowsErrors = checkFormatRows(body);
           if (rowsErrors.length > 0)
             throw new Error(`FormatRowsError: ${rowsErrors}`);
 
           setMetadata(metadata);
           setData(body);
+          setAlert({
+            text: "Formato correcto. Lectura exitosa",
+            type: AlertTypes.success,
+          });
         } catch (e) {
           console.error(e);
           if (
@@ -85,19 +127,40 @@ export default function Import() {
               "ECMA-376 Encrypted file missing /EncryptionInfo"
             )
           ) {
-            setErrorAlert(
-              "Archivo no público. Por favor, cambie la visibilidad del archivo a Public"
-            );
+            setAlert({
+              text: "Archivo no público. Por favor, cambie la visibilidad del archivo a Public",
+              type: AlertTypes.error,
+            });
           } else if (
             String(e).includes(
               "TypeError: Cannot read properties of undefined (reading 'w')"
             )
           ) {
-            setErrorAlert("Existen campos de metadata vacíos");
+            setAlert({
+              text: "Existen campos de metadata vacíos",
+              type: AlertTypes.error,
+            });
           } else if (String(e).includes("Format")) {
-            setErrorAlert(
-              "Formato incorrecto. Por favor, use la plantilla y el formato correcto de los campos"
-            );
+            setAlert({
+              text: "Formato incorrecto. Por favor, use la plantilla y el formato correcto de los campos",
+              type: AlertTypes.error,
+            });
+          } else if (
+            String(e).includes("split is not a function")
+          ) {
+            setAlert({
+              text: "Formato incorrecto. Por favor, revise el formato del campo IP",
+              type: AlertTypes.error,
+            });
+          }else if (
+            String(e).includes(
+              "DatesError"
+            )
+          ) {
+            setAlert({
+              text: "Las fechas ingresadas no son correctas o su diferencia es mayor a 3 meses",
+              type: AlertTypes.error,
+            });
           }
         }
       };
@@ -109,13 +172,14 @@ export default function Import() {
     setMetadata(undefined);
     setData([]);
     setFile(undefined);
-    setErrorAlert("");
+    setAlert(null);
     setPanetCheck(null);
   }
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const files = e.target.files;
     const f = files?.item(0);
     if (f) {
+      cleaner();
       setFile(f);
     } else {
       cleaner();
@@ -124,7 +188,7 @@ export default function Import() {
 
   const handleDownloadReporte = (
     panetResponse: {
-      equipos: Equipo[];
+      equipos: EquipoXLSX[];
       notFound: BodyXLSX;
     },
     rows: BodyXLSX
@@ -132,10 +196,28 @@ export default function Import() {
     const workbook = generateExcel(panetResponse, rows);
     downloadExcel(workbook, "reporte.xlsx");
   };
+
+  const handleCloseModal = () => {
+    setModalDataSubmit(false);
+  };
+
   return (
     <main className="flex flex-1 flex-col p-4 md:p-6 font-normal">
       <Header title="Importar"></Header>
       <div className="flex flex-col gap-y-2">
+        <span className="flex gap-2 items-center text-sm">Para importar un informe use la plantilla adjunta: 
+        <a href="/FORMATO DE INFORME AIC BOITC.xlsx" download>
+            <button
+              className="tooltip btn btn-sm flex items-center self-start shadow-md text-sm"
+              data-tip="Descargar plantilla"
+            >
+              <FontAwesomeIcon
+                icon={"file-lines"}
+                className="text-slate-800"
+              ></FontAwesomeIcon>
+            </button>
+          </a>
+        </span>
         <div className="relative flex flex-row items-end h-12 gap-1">
           <input
             accept=".xls,.xlsx"
@@ -144,31 +226,12 @@ export default function Import() {
             onChange={(e) => handleFile(e)}
           ></input>
 
-          <a href="/FORMATO DE INFORME AIC BOITC.xlsx" download>
-            <button
-              className="tooltip btn btn-sm flex items-center self-start shadow-md text-sm"
-              data-tip="Descargar plantilla"
-            >
-              <FontAwesomeIcon
-                icon={"file-download"}
-                className="text-slate-800"
-              ></FontAwesomeIcon>
-            </button>
-          </a>
+          
 
-          {errorAlert && (
-            <span className="absolute top-0 right-0 flex items-center justify-self-end h-10 text-xs font-bold border gap-3 px-3 py-1 rounded-xl shadow-lg">
-              <FontAwesomeIcon
-                icon="warning"
-                size="xl"
-                className="text-yellow-600 animate-pulse"
-              ></FontAwesomeIcon>
-              {errorAlert}
-            </span>
-          )}
+          {alert && <Alert text={alert.text} type={alert.type}></Alert>}
         </div>
         {file && data.length == 0 && (
-          <div className="flex flex-col h-128 border justify-center items-center font-bold text-sm text-gray-700">
+          <div className="flex flex-col h-128 justify-center items-center font-bold text-sm text-gray-700">
             <span className="loading loading-bars loading-lg"></span>
             Leyendo el archivo
           </div>
@@ -181,54 +244,103 @@ export default function Import() {
                 <span></span>
                 <span className="text-black font-medium">
                   Informe:{" "}
-                  <p className="badge badge-lg text-sm bg-slate-700 text-gray-200">
+                  <p className="badge badge-lg badge-outline text-sm">
                     {metadata?.informe}
                   </p>
                 </span>
                 <span className="text-black font-semibold">
                   Emisor:{" "}
-                  <p className="badge badge-lg text-sm bg-slate-700 text-gray-200">
+                  <p className="badge badge-lg badge-outline text-sm">
                     {metadata?.emisor}
                   </p>
                 </span>
                 <span className="text-black font-semibold">
                   Fecha de recepción:{" "}
-                  <p className="badge badge-lg text-sm bg-slate-700 text-gray-200">
-                    {metadata?.fecha_recepcion}
+                  <p className="badge badge-lg badge-outline text-sm">
+                    {formatDate(metadata?.fecha_recepcion)}
                   </p>
                 </span>
                 <span className="text-black font-semibold">
                   Fecha de compromiso:{" "}
-                  <p className="badge badge-lg text-sm bg-slate-700 text-gray-200">
-                    {metadata?.fecha_compromiso}
+                  <p className="badge badge-lg badge-outline text-sm">
+                    {formatDate(metadata?.fecha_compromiso)}
                   </p>
                 </span>
               </div>
               <div className="flex items-end py-2 gap-2 justify-end">
                 <button
-                  className="btn btn-sm shadow-md"
+                  className={`btn btn-sm shadow-md ${
+                    isPanetChecking ? "btn-disabled" : " "
+                  }`}
                   onClick={async (e) => {
                     e.preventDefault();
                     handlePanetChecking(data);
+                    setAlert(null);
                   }}
                 >
                   Validar datos
-                  <FontAwesomeIcon icon={"check-to-slot"}></FontAwesomeIcon>
+                  {isPanetChecking && (
+                    <span className="loading loading-spinner loading-xs"></span>
+                  )}
+                  {!isPanetChecking && (
+                    <FontAwesomeIcon icon={"check-to-slot"}></FontAwesomeIcon>
+                  )}
                 </button>
-                {panetCheck?.notFound && (
+
+                {panetCheck &&
+                  panetCheck !== null &&
+                  panetCheck?.notFound.length !== 0 && (
+                    <button
+                      className="tooltip btn btn-outline btn-sm btn-error flex shadow-md"
+                      data-tip="Descargar reporte"
+                      onClick={async (e) => {
+                        e.preventDefault();
+                        handleDownloadReporte(panetCheck, data);
+                        setAlert(null);
+                      }}
+                    >
+                      Reporte
+                      <FontAwesomeIcon
+                        icon={"exclamation-circle"}
+                      ></FontAwesomeIcon>
+                    </button>
+                  )}
+                {panetCheck && (
                   <button
-                    className="tooltip btn btn-sm flex shadow-md"
-                    data-tip="Descargar reporte"
+                    className={`tooltip btn btn-sm btn-warning flex shadow-md ${
+                      isInformeSubmitting ? "btn-disabled" : " "
+                    }  ${panetCheck?.equipos.length !== 0?" ":"btn-disabled"}`}
+                    data-tip="En caso de existir, por favor revise el reporte de novedades"
                     onClick={async (e) => {
                       e.preventDefault();
-                      handleDownloadReporte(panetCheck, data);
+                      //handleDownloadReporte(panetCheck, data);
+                      setModalDataSubmit(true);
+                      setAlert(null);
                     }}
                   >
-                    Reporte
-                    <FontAwesomeIcon
-                      icon={"exclamation-circle"}
-                    ></FontAwesomeIcon>
+                    Cargar datos
+                    {isInformeSubmitting && (
+                      <span className="loading loading-spinner loading-xs"></span>
+                    )}
+                    {!isInformeSubmitting && (
+                      <FontAwesomeIcon icon={"upload"}></FontAwesomeIcon>
+                    )}
                   </button>
+                )}
+
+                {modalDataSubmit && panetCheck && (
+                  <Modal
+                    title="Cargar Informe"
+                    text="¿Está seguro de que desea cargar los datos? Recuerde que los equipos incluidos en el reporte de novedades NO serán cargados en el sistema."
+                    actionSubmit={() => {
+                      setModalDataSubmit(false);
+                      setAlert(null);
+                      handleSubmitInforme(data as BodyXLSX, panetCheck.equipos);
+                    }}
+                    icon="info-circle"
+                    textButtonAction="Cargar datos"
+                    onClose={handleCloseModal}
+                  ></Modal>
                 )}
               </div>
             </div>

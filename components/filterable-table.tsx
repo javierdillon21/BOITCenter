@@ -1,4 +1,5 @@
-import Link from "next/link";
+
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
 
@@ -7,9 +8,26 @@ export default function Table(props: {
   data: Object[]; //| {}[];
   routable_rows?: string;
   size: "small" | "normal";
-  idColum?: number | 0;
+  editable: boolean;
+  onSelect: (selectedIds: number[]) => void;
 }) {
-  console.log("ROUTABLE ROWS:: ", props.routable_rows);
+ 
+  const [selected, setSelected] = useState<number[]>([]);
+  const handleSelect = (id: number) => {
+    setSelected((prevSelected) => {
+      if (prevSelected.includes(id)) {
+        return prevSelected.filter((selectedId) => selectedId !== id);
+      } else {
+        return [...prevSelected, id];
+      }
+    });
+  };
+  const [sentences, setSentences] = useState<[]>([])
+
+  useEffect(() => {
+    props.onSelect(selected);
+  }, [selected, props.onSelect]);
+
   const router = useRouter();
   const steps = 30;
   const nreg = props.data.length;
@@ -29,24 +47,54 @@ export default function Table(props: {
   }, [currentTab]);
 
   return (
-    <div className="flex flex-col mx-4 gap-y-4">
-      <div className="flex ">
+    <div className="flex flex-col mx-4 gap-y-4 w-full">
+      <section id="filter-bar" className="flex w-full h-8 text-xs">
+        <div className="flex h-full gap-x-2">
+        <select className="border">
+          {props.header.map((field)=>{
+            return (
+              <option>{field}</option>
+            )
+          })}
+        
+        </select>
+        <select className="border">
+        <option>Contiene</option>
+        <option>No contiene</option>
+        <option>=</option>
+        <option>!=</option>
+        </select>
+        <input type="text" className="border px-2"></input>
+        <FontAwesomeIcon icon={"x"} size="xs" className="self-center hover:cursor-pointer"></FontAwesomeIcon>
+        <span className="flex items-center justify-center w-10 h-6 self-center border font-bold  hover:bg-gray-100 hover:cursor-pointer">AND</span>
+        <FontAwesomeIcon icon={["far","trash-can"]} size="lg" className="flex hover:bg-gray-100 hover:cursor-pointer self-center border p-1.5"></FontAwesomeIcon>
+        </div>
+      </section>
+      <div className="flex">
         <table
           className={`table-fixed ${
             props.size === "small" ? "table-xs" : " "
-          } table-pin-rows`}
+          } table-pin-rows `}
         >
           <thead>
-            <tr className="bg-gray-100 border-b-2">
+            <tr
+              className="bg-gray-100 border-b-2">
+              {props.editable && (
+                <th className="flex border overflow-hidden text-sm font-semibold">Seleccione</th>
+              )}
               {props.header.map((h, i) => {
-                if (!h.includes("id_") && h !== "id")
+                if (!h.includes("id_") && h!=="id")
                   return (
                     <th
                       key={`head-${h}-col-${i}`}
                       className="text-sm font-semibold w-72 text-start"
                     >
+                      <span className="flex items-center justify-between">
                       {h}
-                    </th>
+                      <FontAwesomeIcon icon={"filter"} size="xs" className="text-gray-400 hover:cursor-pointer "></FontAwesomeIcon>
+                    
+                      </span>
+                      </th>
                   );
               })}
             </tr>
@@ -57,20 +105,26 @@ export default function Table(props: {
               .map((reg, i) => {
                 return (
                   <tr
-                    className={`hover:bg-gray-100 border-b ${
-                      props.routable_rows ? "hover:cursor-pointer" : ""
-                    }`}
+                  className={`hover:bg-gray-100 border-b ${props.routable_rows?"hover:cursor-pointer":""}`}
                     key={`key-${i}`}
                     onClick={() => {
-                      if (props.routable_rows) {
+                      if (props.routable_rows && !props.editable) {
                         router.push(
-                          `${props.routable_rows}${
-                            Object.values(reg)[props.idColum || 0]
-                          }`
+                          `${props.routable_rows}${Object.values(reg)[0]}?informe=${router.query.id}`
                         );
                       }
                     }}
                   >
+                    {props.editable && (
+                      <td className="px-4 py-2">
+                        <input
+                          type="checkbox"
+                          checked={selected.includes(Object.values(reg)[0])}
+                          onChange={() => handleSelect(Object.values(reg)[0])}
+                          className="checkbox checkbox-sm"
+                        />
+                      </td>
+                    )}
                     {Object.values(reg).map((k, i) => {
                       const header = Object.keys(reg)[i];
                       if (!header.includes("id_") && header !== "id") {
@@ -135,10 +189,8 @@ export default function Table(props: {
         {/* <button className="join-item btn btn-md btn-active">2</button> */}
         {nreg !== 0 && (
           <span className="flex flex-col text-gray-600 ml-2 text-xs italic">
-            <p className="font-semibold not-italic">
-              Resultados encontrados: {nreg}
-            </p>
-            <p> Mostrando {steps} resultados por página</p>
+            <p className="font-semibold not-italic">Resultados encontrados: {nreg}</p>
+           <p> Mostrando {steps} resultados por página</p>
           </span>
         )}
         {nreg === 0 && (

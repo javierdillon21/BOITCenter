@@ -1,11 +1,6 @@
-import {
-  filterPcListIps,
-  findMatchingObjects,
-  getValidIPs,
-  processRows,
-} from "@/utils/functions";
+import { getValidIPs } from "@/utils/functions";
+import { processRows } from "@/utils/panet";
 import { NextApiRequest, NextApiResponse } from "next";
-import { fileURLToPath } from "url";
 
 //MANEJO DE CONSULTAS A PROACTIVANET
 
@@ -14,7 +9,7 @@ export default async function handler(
   response: NextApiResponse
 ) {
   const token =
-    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqZGlsbG9uIiwib3ZyIjoiZmFsc2UiLCJuYmYiOjE3MjY3ODUzMTIsImV4cCI6MTc1ODMyMTMxMiwiaWF0IjoxNzI2Nzg1MzEyLCJpc3MiOiJwcm9hY3RpdmFuZXQiLCJhdWQiOiJhcGkifQ.g78AVbXLmqpAYw6ZgQ6ETs-xTqJ5teTnLmh4hi0iw8E";
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJQUk9BQ1RJVkFORVRcXEFkbWluaXN0cmF0b3IiLCJvdnIiOiJmYWxzZSIsImF1dCI6IjAiLCJuYmYiOjE3MzMzMjYyNDcsImV4cCI6MTc2NDg2MjI0NywiaWF0IjoxNzMzMzI2MjQ3LCJpc3MiOiJwcm9hY3RpdmFuZXQiLCJhdWQiOiJhcGkifQ.W36oOHyq9xkYW3WVAVpctnC3VTx8cOYgHnvbmeVOBE4";
   console.log("rer.query: ", request.query);
 
   if (request.method === "GET") {
@@ -32,9 +27,10 @@ export default async function handler(
             },
           }
         );
+        console.log(listPcsResponse);
         if (listPcsResponse.ok) {
           const data: PcListIp = await listPcsResponse.json();
-          const ip = "10.32.112.107";
+
           const equipos = data.map((equipo) => {
             if (equipo.ListIPs) {
               const ips = getValidIPs(equipo.ListIPs);
@@ -93,6 +89,7 @@ export default async function handler(
     }
   } else if (request.method === "POST") {
     //
+
     switch (request.query.req) {
       case "listPcs":
         const listPcsResponse = await fetch(
@@ -106,6 +103,7 @@ export default async function handler(
             },
           }
         );
+
         if (listPcsResponse.ok) {
           const data: PcListIp = await listPcsResponse.json();
           const rowsXLSX: BodyXLSX = request.body;
@@ -116,9 +114,15 @@ export default async function handler(
             } else return { Id: equipo.Id, ListIPs: "0.0.0.0" };
           });
 
-          const result = await processRows(rowsXLSX, dataPanet, token)
-          if (result) response.status(200).json(result);
-         
+          const result = await processRows(rowsXLSX, dataPanet, token);
+
+          if (result) {
+            response.status(200).json(result);
+          } 
+        }else {
+          response
+            .status(listPcsResponse.status)
+            .json({ error: "Error fetching listPcs" });
         }
         break;
 

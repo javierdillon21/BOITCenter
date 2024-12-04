@@ -19,14 +19,8 @@ interface Registro {
   observacion_informe: string;
 }
 
-interface Informe {
-  id: string;
-  año: string;
-  descripcion?: string;
-}
-
 interface RequestProperties {
-  type: Query | Mutation;
+  operation: Query | Mutation | OperationRequest;
   id: string | "all";
   limit?: number;
   data?: Table;
@@ -46,7 +40,246 @@ type Mutation =
   | "UpdateInforme"
   | "UpdateRegistro";
 
+type OperationRequest = "CargarInforme";
+
 type Table = Registro | Informe;
+
+type InputValues =
+  | CreateEquipoInput
+  | CreateEquipoVulnerabilidadInput
+  | CreateInformeEquipoInput
+  | CreateInformeInput
+  | CreateInformeVulnerabilidadInput
+  | CreateVulnerabilidadInput
+  | submitInformeInput
+  | updateEstadoVulnerabilidadInput
+  | updateEstadoVulnerabilidad
+  | updatePropsVulnerabilidad
+  | updateInformeCompromisoInput
+  | updateInformeEntregaInput;
+
+type RequestType =
+  | "createInforme"
+  | "createEquipo"
+  | "createVulnerabilidad"
+  | "createInformeEquipo"
+  | "createInformeVulnerabilidad"
+  | "createEquipoVulnerabilidad"
+  | "submitInforme"
+  | "listInforme"
+  | "getInforme"
+  | "updateEstadoVulnerabilidad"
+  | "updatePropsVulnerabilidad"
+  | "updateInformeCompromiso"
+  | "updateInformeEntrega" | "deleteInforme"
+
+interface Equipo {
+  id: number;
+  id_proactiva: string;
+  sistema_operativo: string;
+  clasificaciones: string;
+  localizacion: string;
+  hipervisor: string;
+  responsable_boitc: string;
+  responsable_servicio: string;
+  responsable_so: string;
+  descripcion: string;
+  tipo: string;
+  ips: string[]; // INET[] se mapea a un array de strings en TypeScript
+  hostname: string;
+}
+
+interface Vulnerabilidad {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  cve?: string; // El campo cve es opcional
+  mitigacion_sugerida: string;
+  referencia?: string; // El campo referencia es opcional
+  observacion?: string; // El campo observacion es opcional
+  estado: EstadoVulnerabilidad;
+}
+
+interface VulnerabilidadDataTable {
+  id?: string;
+  vulnerabilidad?: string;
+  descripcion?: string;
+  hostname?: string;
+  ips?: string[];
+  cve?: string;
+  mitigacion_sugerida?: string;
+  referencia?: string; // El campo referencia es opcional
+  observacion?: string; // El campo observacion es opcional
+  estado?: EstadoVulnerabilidad | string;
+  id_proactiva?: string;
+  id_equipo?: string;
+  responsable_boitc?: string;
+  responsable_servicio?: string;
+}
+
+
+
+interface Informe {
+  id: number;
+  nombre: string;
+  emisor: string;
+  fecha_recepcion: Date | string;
+  fecha_compromiso: Date[] | string;
+  fecha_entrega: Date | string;
+  estado: string;
+}
+
+interface InformeEquipo {
+  informe_id: number;
+  equipo_id: number;
+}
+
+interface InformeVulnerabilidad {
+  informe_id: number;
+  vulnerabilidad_id: number;
+  estado: string;
+}
+
+interface EquipoVulnerabilidad {
+  equipo_id: number;
+  vulnerabilidad_id: number;
+}
+
+interface EquipoVulnerabilidadesResult{
+  id_informe: string
+  id_vulnerabilidad: string
+  informe: string
+  vulnerabilidad: string
+  descripcion: string
+  cve: string
+  mitigacion_sugerida: string
+  referencia: string
+  observacion: string
+  estado: string
+}
+
+type EstadoVulnerabilidad =
+  | "Mitigada"
+  | "Pendiente"
+  | "Autorización Pendiente"
+  | "Escalada"
+  | "Mitigación programada"
+  | "No mitigada";
+
+type EstadoColor = {
+  [key in string]: string;
+};
+
+interface updateInformeCompromisoInput {
+  id: string;
+  fecha_compromiso: string;
+}
+
+interface updateInformeEntregaInput {
+  id_informe: string;
+  fecha_entrega: string;
+}
+
+type updateEstadoVulnerabilidadInput = updateEstadoVulnerabilidad[];
+interface updateEstadoVulnerabilidad {
+  id_vulnerabilidad: string;
+  id_informe: string;
+  estado: string;
+}
+
+interface updatePropsVulnerabilidad {
+  id_vulnerabilidad: string;
+  id_informe: string;
+  estado: string;
+  observacion: string;
+}
+
+interface getInformeVulnerabilidadesResponse {
+  clasificaciones: string;
+  equipo_descripcion: string;
+  equipo_id: string;
+  equipo_tipo: string;
+  estado_vulnerabilidad: string;
+  cve: string;
+  mitigacion_sugerida: string;
+  observacion: string;
+  referencia: string;
+  hipervisor: string;
+  hostname: string;
+  id_proactiva: string;
+  informe_estado: string;
+  ips: string[];
+  localizacion: string;
+  responsable_boitc: string;
+  responsable_servicio: string;
+  responsable_so: string;
+  sistema_operativo: string;
+  descripcion: string;
+  vulnerabilidad_id: string;
+  vulnerabilidad: string;
+}
+
+type DataPie = ItemPie[];
+interface ItemPie {
+  value: number;
+  label: string;
+  color: string;
+}
+/********MUTATIONS TYPES PGDB */
+
+interface CreateInformeInput {
+  nombre: string;
+  emisor: string;
+  fecha_recepcion: Date;
+  fecha_compromiso: Date;
+  estado: string;
+}
+
+interface CreateEquipoVulnerabilidadInput {
+  equipo_id: number;
+  vulnerabilidad_id: number;
+}
+interface CreateInformeVulnerabilidadInput {
+  informe_id: number;
+  vulnerabilidad_id: number;
+  estado: string;
+}
+interface CreateInformeEquipoInput {
+  informe_id: number;
+  equipo_id: number;
+}
+interface CreateVulnerabilidadInput {
+  nombre: string;
+  descripcion: string;
+  cve?: string; // El campo cve es opcional
+  mitigacion_sugerida: string;
+  referencia?: string; // El campo referencia es opcional
+  observacion?: string; // El campo observacion es opcional
+}
+interface CreateEquipoInput {
+  id_proactiva: string;
+  sistema_operativo: string;
+  clasificaciones: string;
+  localizacion: string;
+  hipervisor: string;
+  responsable_boitc: string;
+  responsable_servicio: string;
+  responsable_so: string;
+  descripcion: string;
+  tipo: string;
+  ips: string[]; // INET[] se mapea a un array de strings en TypeScript
+  hostname: string;
+}
+
+interface TableFields {
+  columID: number;
+  dataTypeID: number;
+  dataTypeModifier: number;
+  dataTypeSize: number;
+  format: string;
+  name: string;
+  tableID: number;
+}
 
 //////***** XLSX TYPES*/
 
@@ -68,14 +301,14 @@ interface RowXLSX {
   Vulnerabilidad: string;
 }
 
-interface DataSheetXLSX{
-  encabezado: HeaderXLSX
-  cuerpo: BodyXLSX
+interface DataSheetXLSX {
+  encabezado: HeaderXLSX;
+  cuerpo: BodyXLSX;
 }
 
 //////***** */
 
-interface Equipo {
+interface EquipoXLSX {
   ips: string[];
   id_proactiva: string;
   hostname: string;
@@ -90,6 +323,33 @@ interface Equipo {
   hipervisor: string;
 }
 
+interface RecordXLSX {
+  CVE: string;
+  Descripción: string;
+  IP: string[];
+  "Mitigación sugerida": string;
+  Referencia: string;
+  Vulnerabilidad: string;
+  id_proactiva: string;
+  hostname: string;
+  responsable_boitc: string;
+  responsable_so: string;
+  responsable_servicio: string;
+  sistema_operativo: string;
+  descripcion: string;
+  tipo: string;
+  clasificaciones: string;
+  localizacion: string;
+  hipervisor: string;
+}
+interface deleteInformeInput {
+  id_informe: string
+}
+
+interface submitInformeInput {
+  records: RecordXLSX[];
+  metadata: HeaderXLSX;
+}
 //PROACTIVANET TYPES
 type QueryPanet = "listPcsRaw" | "getPcByHostname" | "listPcsIP" | "listPcs";
 
@@ -294,3 +554,15 @@ type CustomFieldsPanet = CustomFieldPanet[];
 
 type PcListIp = { ListIPs: string; Id: string }[];
 type PcListIps = { ListIPs: string | string[]; Id: string }[];
+
+interface AlertProps {
+  text: string;
+  type: AlertType;
+}
+
+interface AlertType {
+  icon: string;
+  classname: string;
+}
+
+type DateFormats = "yyyy-mm-dd" | "dd-mm-yyyy" | "dd/mm/yyyy";

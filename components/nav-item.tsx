@@ -14,7 +14,7 @@ export function NavItem({
   defaultstyle?: boolean;
 }) {
   const pathname = usePathname();
-  console.log(pathname);
+
 
   if (defaultstyle)
     return (

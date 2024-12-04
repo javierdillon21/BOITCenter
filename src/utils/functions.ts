@@ -1,144 +1,65 @@
 import XLSX from "xlsx";
 import { customfieldspanet } from "./panet";
-export function parseToURL(obj: RequestProperties) {
-  const url = `/api/pgsql/${obj.type}?id=${obj.id}${`${
-    obj.limit ? `?limit=${obj.limit}` : ""
-  }`}${`${obj.data ? `?data=${obj.data}` : ""}`}`;
-  return url;
-}
-
-export async function getDataDB(req: RequestProperties) {
-  const url = parseToURL(req);
-  const response = await fetch(url, {
-    method: "GET",
-    mode: "cors",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    //body: JSON.stringify(data)
-  });
-  return response.json();
-}
-
-export async function postDataDB(req: RequestProperties) {
-  const url = parseToURL(req);
-  const response = await fetch(url, {
-    method: "POST",
-    mode: "cors",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(req.data),
-  });
-  return response.json();
-}
-
-//CONSULTAS API PROACTIVANET******************************
-
-//***********GET */
-export async function getPcByHostnamePanet(req: RequestPanetProperties) {
-  const url = `http://10.191.204.61/proactivanet/api/Pcs?Hostname=${req.fields}$fields=${req.fields}`;
-  const response = await fetch(url, {
-    method: "GET",
-    mode: "cors",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    //body: JSON.stringify(data)
-  });
-  return response.json();
-}
-
-export async function listPcsRawPanet(req: RequestPanetProperties) {
-  const url = `/api/panet/listPcsRaw`;
-  const response = await fetch(url, {
-    method: "GET",
-    mode: "cors",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-  return response.json();
-}
-
-export async function listPcsIPPanet(req: RequestPanetProperties) {
-  const url = `/api/panet/listPcsIP?$fields=ListIPs`;
-  const response = await fetch(url, {
-    method: "GET",
-    mode: "cors",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-    },
-  });
-  return response.json();
-}
-
-//***********POST */
-
-export async function listPcsPanet(
-  req: RequestPanetProperties,
-  data: BodyXLSX
-): Promise<{ equipos: Equipo[]; notFound: BodyXLSX }> {
-  const url = `/api/panet/listPcs`;
-  const response = await fetch(url, {
-    method: "POST",
-    mode: "cors",
-    credentials: "same-origin",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(data),
-  });
-
-  return response.json();
-}
-
-export function findMatchingObjects(
-  ipString: string,
-  objects: PcListIp
-): PcListIp {
-  // Divide el string de IPs en una lista
-  const ipList = ipString.split(";");
-
-  // Inicializa una lista para almacenar los objetos coincidentes
-  const matchingObjects: PcListIp = [];
-
-  // Itera sobre cada objeto en la lista
-  for (const obj of objects) {
-    // Verifica si todas las IPs en ipList están presentes en ListIPs del objeto
-    if (ipList.every((ip) => obj.ListIPs.includes(ip))) {
-      matchingObjects.push(obj);
-    }
-  }
-
-  return matchingObjects;
-}
-
-//VARIOS******************************
-
-export function PushDataToDB() {
-  /*1. recuperar la info completa de los equipos consultando a PANET
-    2. crear los registros en la base
-  */
-}
-
-export function createInforme() {}
-
-export function createVulnerabilidad() {}
-
-export function createEquipo() {}
-
-export function createInformeEquipo() {}
-export function createInformeVulnerabilidad() {}
-
-export function createEquipoVulnerabilidad() {}
+import path from "path";
 
 //UTILITARIOS******************************
+
+const estadoColor: EstadoColor = {
+  Mitigada: "#28a745",
+  Pendiente: "#CCAF61",
+  "Autorización Pendiente": "#C17767",
+  Escalada: "#CADBC0",
+  "Mitigación programada": "#6D98BA",
+  "No mitigada": "#35393C",
+};
+
+export function getStatsVulnerabilidades(
+  vulnerabilidades: getInformeVulnerabilidadesResponse[]
+): DataPie {
+  const estadoCounts: { [key: string]: number } = {};
+
+  // Contar las vulnerabilidades por estado
+  vulnerabilidades.forEach((vulnerabilidad) => {
+    const estado = vulnerabilidad.estado_vulnerabilidad;
+    if (estadoCounts[estado]) {
+      estadoCounts[estado] += 1;
+    } else {
+      estadoCounts[estado] = 1;
+    }
+  });
+
+  // Crear el arreglo de objetos ItemPie
+  const dataPie: DataPie = Object.entries(estadoCounts).map(
+    ([estado, count]) => ({
+      value: count,
+      label: estado,
+      color: estadoColor[estado] || "#000000", // Color por defecto si no se encuentra el estado
+    })
+  );
+
+  return dataPie;
+}
+export function getHeaders(tableFields: TableFields[]): string[] {
+  const headers = tableFields.map((field) => {
+    let formatedHeader = field.name.replace(/_/g, " ");
+    formatedHeader = formatedHeader.toLowerCase();
+    formatedHeader =
+      formatedHeader.charAt(0).toUpperCase() + formatedHeader.slice(1);
+    return formatedHeader;
+  });
+  return headers;
+}
+
+export function getHeadersGen(tableFields: string[]): string[] {
+  const headers = tableFields.map((field) => {
+    let formatedHeader = field.replace(/_/g, " ");
+    formatedHeader = formatedHeader.toLowerCase();
+    formatedHeader =
+      formatedHeader.charAt(0).toUpperCase() + formatedHeader.slice(1);
+    return formatedHeader;
+  });
+  return headers;
+}
 
 export function getValidIPs(ipList: string): string[] {
   const ipRegex =
@@ -148,6 +69,7 @@ export function getValidIPs(ipList: string): string[] {
 }
 
 export function validarIP(ip: string): boolean {
+  //console.log("ips a splitear:", ip);
   const ipRegex =
     /^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
   return ip.split(";").every((ipPart) => ipRegex.test(ipPart.trim()));
@@ -191,39 +113,89 @@ export function checkFormatRows(array: BodyXLSX): string[] {
   return errores;
 }
 
-export function filterPcListIps(
-  rows: BodyXLSX,
-  pcList: PcListIps
-): { found: PcListIps; notFound: BodyXLSX } {
-  const allRowIps = rows.flatMap((row) =>
-    row.IP.split(";").map((ip) => ip.trim())
-  );
-  const found: PcListIps = [];
-  const notFound: BodyXLSX = [];
+export function verificarFechaCompromiso(
+  fecha_recepcion: string,
+  fecha_compromiso: string
+): boolean {
+  // Convertir las fechas de string a objetos Date
+  const recepcion = new Date(fecha_recepcion);
+  const compromiso = new Date(fecha_compromiso);
 
-  pcList.forEach((pc) => {
-    const pcIps = Array.isArray(pc.ListIPs)
-      ? pc.ListIPs
-      : pc.ListIPs.split(";").map((ip) => ip.trim());
-    if (pcIps.some((ip) => allRowIps.includes(ip))) {
-      found.push(pc);
+  console.log(`rececpcion: ${recepcion}   compromiso: ${compromiso}`);
+  // Verificar que la fecha de recepción sea anterior a la fecha de compromiso
+  if (recepcion >= compromiso) {
+    return false;
+  }
+
+  // Calcular la diferencia en meses entre las dos fechas
+  const diffMonths =
+    (compromiso.getFullYear() - recepcion.getFullYear()) * 12 +
+    (compromiso.getMonth() - recepcion.getMonth());
+
+  // Si la diferencia es mayor a 3 meses, retornar false
+  return diffMonths <= 3;
+}
+export function isValidDate(inputDate: string): boolean {
+  const date = new Date(inputDate);
+  return !isNaN(date.getTime()); // Retorna true si es una fecha válida, false si no lo es
+}
+
+export function formatDate(
+  inputDate: string | Date | undefined,
+  format?: DateFormats
+): string {
+  if (!inputDate) return "0000-00-00";
+  else {
+    const date = new Date(inputDate);
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0"); // Los meses comienzan desde 0
+    const day = String(date.getDate()).padStart(2, "0");
+    switch (format) {
+      case "yyyy-mm-dd":
+        return `${year}-${month}-${day}`;
+      case "dd-mm-yyyy":
+        return `${day}-${month}-${year}`;
+
+      default:
+        return `${day}/${month}/${year}`;
     }
-  });
+  }
+}
 
-  rows.forEach((row) => {
-    const rowIps = row.IP.split(";").map((ip) => ip.trim());
-    const isFound = pcList.some((pc) => {
-      const pcIps = Array.isArray(pc.ListIPs)
-        ? pc.ListIPs
-        : pc.ListIPs.split(";").map((ip) => ip.trim());
-      return pcIps.some((ip) => rowIps.includes(ip));
-    });
-    if (!isFound) {
-      notFound.push(row);
-    }
-  });
+export function calcularRangoFechas(
+  fecha_recepcion: string,
+  fecha_compromiso: string
+): { fecha_min: string; fecha_max: string } {
+  // Convertir las fechas de string a objetos Date utilizando Date.parse()
+  const recepcion = new Date(Date.parse(fecha_recepcion));
+  const compromiso = new Date(Date.parse(fecha_compromiso));
 
-  return { found, notFound };
+  // Verificar que las fechas sean válidas
+  if (isNaN(recepcion.getTime()) || isNaN(compromiso.getTime())) {
+    throw new Error("Fechas inválidas");
+  }
+
+  // Formatear fecha en formato 'yyyy-mm-dd'
+  const formatoFecha = (fecha: Date): string => {
+    const year = fecha.getFullYear();
+    const month = String(fecha.getMonth() + 1).padStart(2, "0");
+    const day = String(fecha.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Fecha mínima es la última fecha de compromiso pasada
+  const fecha_min = formatoFecha(compromiso);
+
+  // Calcular la fecha máxima sumando 3 meses a la fecha de recepción
+  const fecha_maxima = new Date(recepcion);
+  fecha_maxima.setMonth(fecha_maxima.getMonth() + 3);
+
+  // Convertir fecha máxima a formato 'yyyy-mm-dd'
+  const fecha_max = formatoFecha(fecha_maxima);
+
+  // Devolver ambas fechas en el formato 'yyyy-mm-dd'
+  return { fecha_min, fecha_max };
 }
 
 export const expectedTemplate = {
@@ -256,156 +228,11 @@ export function checkWorksheetTemplate(
   return errores;
 }
 
-// ************************
-
-async function fetchCustomFieldData(
-  entityId: string,
-  customFieldId: string,
-  token: string
-): Promise<string> {
-  const response = await fetch(
-    `http://10.191.204.61/proactivanet/api/Pcs/${entityId}/customFields/${customFieldId}`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: token,
-        "Accept-Language": "es",
-      },
-    }
-  );
-  const data = await response.json();
-  return data.View; // Ajusta esto según la estructura de la respuesta de la API
-}
-
-async function fetchSystemInfo(
-  entityId: string,
-  token: string
-): Promise<{
-  sistema_operativo: string;
-  localizacion: string;
-  hostname: string;
-}> {
-  const response = await fetch(
-    `http://10.191.204.61/proactivanet/api/Pcs?Id=${entityId}&$fields=Hostname,LocationTranslatedPath,OsName`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: token,
-        "Accept-Language": "es",
-      },
-    }
-  );
-  const data = await response.json();
-
-  return {
-    sistema_operativo: data[0].OsName,
-    localizacion: data[0].LocationTranslatedPath,
-    hostname: data[0].Hostname,
-  };
-}
-
-async function fetchClassifications(
-  entityId: string,
-  token: string
-): Promise<string> {
-  const response = await fetch(
-    `http://10.191.204.61/proactivanet/api/Pcs/${entityId}/classifications`,
-    {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        Authorization: token,
-        "Accept-Language": "es",
-      },
-    }
-  );
-  const data = await response.json();
-  return data[0].Path;
-}
-
-async function buildEquipo(
-  row: RowXLSX,
-  pc: { ListIPs: string | string[]; Id: string },
-  token: string
-): Promise<Equipo> {
-  const customFieldData = await Promise.all(
-    customfieldspanet.map((field) =>
-      fetchCustomFieldData(pc.Id, field.CustomField_id, token)
-    )
-  );
-
-  const customFieldMap = customFieldData.reduce((acc, view, index) => {
-    acc[customfieldspanet[index].name] = view;
-    return acc;
-  }, {} as Record<string, any>);
-
-  const systemInfo = await fetchSystemInfo(pc.Id, token);
-  const classifications = await fetchClassifications(pc.Id, token);
-
-  return {
-    ips: row.IP.split(";").map((ip) => ip.trim()),
-    id_proactiva: pc.Id,
-    hostname: systemInfo.hostname || "",
-    responsable_boitc: customFieldMap["Responsable BOITC"] || "",
-    responsable_so: customFieldMap["Respon. S.O"] || "",
-    responsable_servicio: customFieldMap["Respon. Aplicación"] || "",
-    sistema_operativo: systemInfo.sistema_operativo || "",
-    descripcion: customFieldMap["Descripción /Funcionalidad"] || "",
-    tipo: customFieldMap["Tipo"] || "",
-    clasificaciones: classifications || "",
-    localizacion: systemInfo.localizacion || "",
-    hipervisor: customFieldMap["Hipervisor/Modelo"] || "",
-  };
-}
-
-export async function processRows(
-  rows: BodyXLSX,
-  pcList: PcListIps,
-  token: string
-): Promise<{ equipos: Equipo[]; notFound: BodyXLSX }> {
-  const { found, notFound } = filterPcListIps(rows, pcList);
-
-  const equipos = await Promise.all(
-    found
-      .map((pc) => {
-        const row = rows.find((r) =>
-          r.IP.split(";").some((ip) => pc.ListIPs.includes(ip.trim()))
-        );
-        if (row) {
-          return buildEquipo(row, pc, token);
-        }
-        return null;
-      })
-      .filter((equipo) => equipo !== null) as Promise<Equipo>[]
-  );
-
-  return { equipos, notFound };
-}
-
 /***************** SHEETJS  */
-
-/*export function generateExcel(data: BodyXLSX): XLSX.WorkBook {
-  const dataWithObservation = data.map(row => ({
-    ...row,
-    Observación: "Equipo no encontrado en Proactivanet"
-  }));
-
-  const worksheet = XLSX.utils.json_to_sheet(dataWithObservation);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, 'Sheet1');
-
-  return workbook;
-}
-
-export function downloadExcel(workbook: XLSX.WorkBook, filename: string) {
-  XLSX.writeFile(workbook, filename);
-}*/
 
 export function generateExcel(
   data: {
-    equipos: Equipo[];
+    equipos: EquipoXLSX[];
     notFound: BodyXLSX;
   },
   bodyXLSX: BodyXLSX
@@ -452,3 +279,134 @@ export function generateExcel(
 export function downloadExcel(workbook: XLSX.WorkBook, filename: string) {
   XLSX.writeFile(workbook, filename);
 }
+
+export async function downloadExcelInforme(
+  informe: Informe,
+  vulnerabilidades: VulnerabilidadDataTable[]
+) {
+  const response = await fetch("/api/generar-reporte", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ informe, vulnerabilidades }),
+  });
+
+  if (response.ok) {
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "GeneratedReport.xlsx";
+    a.click();
+    window.URL.revokeObjectURL(url);
+  } else {
+    console.error("Error descargando el reporte");
+  }
+}
+
+export function generarExcelHistoricoVulnerabilidades(
+  encabezado: Equipo,
+  filas: EquipoVulnerabilidadesResult[]
+): XLSX.WorkBook {
+  // Crear un nuevo libro de trabajo
+  const workbook = XLSX.utils.book_new();
+
+  // Crear una nueva hoja de trabajo
+  const worksheet = XLSX.utils.aoa_to_sheet([]);
+
+  const cellStyleEncabezado = {
+    font: { bold: true },
+    border: {
+      top: { style: "thin" },
+      bottom: { style: "thin" },
+      left: { style: "thin" },
+      right: { style: "thin" },
+    },
+  };
+  const cellStyleTableHeaders = {
+    font: { bold: true },
+    border: {
+      top: { style: "thin" },
+      bottom: { style: "bold" },
+      left: { style: "thin" },
+      right: { style: "thin" },
+    },
+  };
+  // Escribir las propiedades del encabezado en las columnas A y B
+  let rowIndex = 0;
+  for (const [key, value] of Object.entries(encabezado)) {
+    //console.log(`${key}: ${value}`);
+    worksheet[`A${rowIndex + 1}`] = { t: "s", v: `${key}:` };
+    worksheet[`B${rowIndex + 1}`] = { t: "s", v: value };
+
+    rowIndex++;
+  }
+  rowIndex++;
+  rowIndex++;
+  // Escribir los nombres de las columnas para las filas de datos
+  const columnNames = Object.keys(filas[0]);
+  console.log("COLUMNAS:: ", columnNames);
+
+  XLSX.utils.sheet_add_aoa(worksheet, [columnNames], {
+    origin: `A${rowIndex}`,
+  });
+  rowIndex++;
+
+  const data = filas.map((r, i) => {
+    return Object.values(r);
+  });
+  XLSX.utils.sheet_add_aoa(worksheet, data, { origin: `A${rowIndex}` });
+
+  // Añadir la hoja de trabajo al libro de trabajo
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+
+  // Generar el archivo Excel
+  return workbook;
+}
+export function createRecords(
+  body: RowXLSX[],
+  equipos: EquipoXLSX[]
+): RecordXLSX[] {
+  const records: RecordXLSX[] = [];
+
+  body.forEach((row) => {
+    const ips = row.IP.split(";").map((ip) => ip.trim());
+    equipos.forEach((equipo) => {
+      if (
+        equipo.responsable_so === "Juan Carlos Moncayo" &&
+        equipo.ips.some((ip) => ips.includes(ip))
+      ) {
+        records.push({
+          CVE: row.CVE,
+          Descripción: row.Descripción,
+          IP: ips,
+          "Mitigación sugerida": row["Mitigación sugerida"],
+          Referencia: row.Referencia,
+          Vulnerabilidad: row.Vulnerabilidad,
+          id_proactiva: equipo.id_proactiva,
+          hostname: equipo.hostname,
+          responsable_boitc: equipo.responsable_boitc,
+          responsable_so: equipo.responsable_so,
+          responsable_servicio: equipo.responsable_servicio,
+          sistema_operativo: equipo.sistema_operativo,
+          descripcion: equipo.descripcion,
+          tipo: equipo.tipo,
+          clasificaciones: equipo.clasificaciones,
+          localizacion: equipo.localizacion,
+          hipervisor: equipo.hipervisor,
+        });
+      }
+    });
+  });
+
+  return records;
+}
+XLSX;
+
+export const estadosVulnerabilidad = [
+  "Mitigada",
+  "Pendiente",
+  "Autorización Pendiente",
+  "Escalada",
+  "Mitigación programada",
+  "No mitigada",
+];

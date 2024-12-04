@@ -1,75 +1,129 @@
-"use client";
-import Image from "next/image";
-import Table from "../components/table";
-import { reg } from "@/app/datosprueba";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "../components/header";
-//import { GetServerSideProps, InferGetServerSidePropsType } from "next";
-
-/*export const getServerSideProps = (async () => {
-  const response = await fetch(
-    "http://10.191.204.61/proactivanet/api/Pcs?Hostname=DevProjects",
-    {
-      method: "GET",
-      
-      headers: {
-        Accept: "application/json",
-        Authorization:
-          "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJqZGlsbG9uIiwib3ZyIjoiZmFsc2UiLCJuYmYiOjE3MjY3ODUzMTIsImV4cCI6MTc1ODMyMTMxMiwiaWF0IjoxNzI2Nzg1MzEyLCJpc3MiOiJwcm9hY3RpdmFuZXQiLCJhdWQiOiJhcGkifQ.g78AVbXLmqpAYw6ZgQ6ETs-xTqJ5teTnLmh4hi0iw8E",
-        "Accept-Language": "es",
-      },
-    }
-  );
-  const data: GetPcResponseBody = await response.json();
-  return { props: { data } };
-}) satisfies GetServerSideProps<{ data: GetPcResponseBody }>;*/
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  listEquipo,
+  listRecord,
+  listVulnerabilidadesEstado,
+} from "@/utils/postgresql";
+import Link from "next/link";
 
 export default function Home() {
   const [search, setSearch] = useState("");
-  const registros = reg;
+  const [equipos, setEquipos] = useState();
+  const [vulnerabilidades, setVulnerabilidades] = useState<
+    {
+      informe_id: string;
+      vulnerabilidad_id: string;
+      estado: string;
+      observacion: string;
+    }[]
+  >();
+  const [vMitigadas, setVMitigadas] = useState<number>();
+  const [vNoMitigadas, setVNoMitigadas] = useState<number>();
+  const [informes, setInformes] = useState<Informe[]>();
+  const [informesEntregados, setInformesEntregados] = useState<number>();
 
+  useEffect(() => {
+    if (vulnerabilidades) {
+      const mitigadas = vulnerabilidades.reduce((acc, vulnerabilidad) => {
+        return vulnerabilidad.estado === "Mitigada" ? acc + 1 : acc;
+      }, 0);
+      setVMitigadas(mitigadas);
+
+      const noMitigadas = vulnerabilidades.reduce((acc, vulnerabilidad) => {
+        return vulnerabilidad.estado === "No mitigada" ? acc + 1 : acc;
+      }, 0);
+      setVNoMitigadas(noMitigadas);
+    }
+  }, [vulnerabilidades]);
+
+  useEffect(() => {
+    if (informes) {
+      const entregados = informes.reduce((acc, informe) => {
+        return informe.estado === "Entregado" ? acc + 1 : acc;
+      }, 0);
+      setInformesEntregados(entregados);
+    }
+  }, [informes]);
+
+  useEffect(() => {
+    listEquipo().then((res) => {
+      setEquipos(res.data);
+    });
+    listVulnerabilidadesEstado().then((res) => {
+      setVulnerabilidades(res.data);
+    });
+    listRecord("listInforme").then((res) => {
+      setInformes(res.rows);
+    });
+  }, []);
+
+  if (
+    !equipos ||
+    !vulnerabilidades ||
+    !vMitigadas ||
+    !vNoMitigadas ||
+    !informes ||
+    !informesEntregados
+  )
+    return (
+      <div className="flex flex-col border flex-1 justify-center items-center font-bold text-sm text-gray-700">
+        <span className="loading loading-bars loading-lg"></span>
+        Cargando datos
+      </div>
+    );
   return (
     <main className="flex flex-1 flex-col p-4 md:p-6">
       <Header title="Bitácora"></Header>
-      <div className="w-full mb-4">
-        <label className="input input-md input-bordered flex items-center w-96">
-          <input
-            type="text"
-            className="grow"
-            placeholder="Busqueda"
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-              setSearch(e.target?.value)
-            }
-          />
-        </label>
-        {/* <Search value={searchParams.q} /> */}
-      </div>
-      <Table
-        size="normal"
-        header={[
-          "ID",
-          "Fecha recepcion",
-          "Fecha entrega",
-          "Hostname",
-          "Direccion IP",
-          "Area",
-          "Proyecto",
-          "Alertas",
-          "Puerto",
-          "Estado",
-          "Observacion estado",
-          "Observacion informe",
-        ]}
-        data={registros.filter(
-          (e: Object) =>
-            e &&
-            Object.values(e)
-              .join()
-              .toLowerCase()
-              .includes((search && search.toLowerCase()) || "")
-        )}
-      ></Table>
-      {/* <UsersTable users={users} offset={newOffset} /> */}
+      <section className="flex min-w-1/2 max-w-4xl">
+        <div className="stats shadow w-full rounded-lg">
+          <Link href={"/report"}>
+            <div className="stat">
+              <div className="stat-figure text-primary">
+                <FontAwesomeIcon
+                  icon={"computer"}
+                  className="text-4xl"
+                ></FontAwesomeIcon>
+              </div>
+              <div className="stat-title">Equipos registrados</div>
+              <div className="stat-value text-primary">
+                {(equipos as []).length}
+              </div>
+            </div>
+          </Link>
+
+          <div className="stat">
+            <div className="stat-figure text-secondary">
+              <FontAwesomeIcon
+                icon={"bug-slash"}
+                className="text-4xl"
+              ></FontAwesomeIcon>
+            </div>
+            <div className="stat-value">{`${Math.round(
+              (vMitigadas * 100) / vulnerabilidades.length
+            )}%`}</div>
+            <div className="stat-title">Vulnerabilidades mitigadas</div>
+            <div className="stat-desc text-secondary">{`de ${vulnerabilidades.length} en total`}</div>
+          </div>
+
+          <div className="stat">
+            <div className="stat-figure text-secondary">
+              <FontAwesomeIcon
+                icon={"file-contract"}
+                className="text-4xl"
+              ></FontAwesomeIcon>
+            </div>
+            <div className="stat-value">{`${Math.round(
+              (informesEntregados * 100) / informes.length
+            )}%`}</div>
+            <div className="stat-title">Informes entregados</div>
+            <div className="stat-desc text-secondary">{`${
+              informes.length - informesEntregados
+            } pendientes`}</div>
+          </div>
+        </div>
+      </section>
     </main>
   );
 }
